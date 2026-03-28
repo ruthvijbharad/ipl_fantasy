@@ -151,7 +151,44 @@ def fetch_player_stats(match_id):
     except:
         return {}
 
-def parse_scorecard(scorecard):
+@st.cache_data(ttl=120)
+def fetch_match_info(match_id):
+    """Fetch toss result and Playing XI from match info endpoint."""
+    if not API_KEY or not match_id:
+        return {}, []
+    try:
+        r = requests.get(
+            "https://api.cricapi.com/v1/match_info",
+            params={"apikey": API_KEY, "id": match_id},
+            timeout=8,
+        )
+        data = r.json()
+        if data.get("status") != "success":
+            return {}, []
+        info = data.get("data", {})
+
+        # Toss
+        toss = {}
+        toss_data = info.get("tossResults", {})
+        if toss_data:
+            toss = {
+                "winner": toss_data.get("tossWinner", ""),
+                "decision": toss_data.get("tossDecision", ""),
+            }
+
+        # Playing XI — flatten both teams
+        playing = []
+        for team in info.get("players", []):
+            for p in team:
+                name = p.get("name", "")
+                if name:
+                    playing.append(name)
+
+        return toss, playing
+    except:
+        return {}, []
+
+
     stats = {}
     for innings in scorecard.get("scorecard", []):
         for batter in innings.get("batting", []):
@@ -200,26 +237,37 @@ def parse_scorecard(scorecard):
 
     return stats
 
-def calc_fantasy_points(team_entry, player_stats):
+def calc_fantasy_points(team_entry, player_stats, playing_xi=None):
+    """Returns (total_pts, breakdown_list).
+    breakdown_list = [{"name", "pts", "raw", "role", "is_captain", "is_vc", "benched"}]
+    """
     total = 0
+    breakdown = []
     for pid in team_entry["players"]:
         p = next((x for x in PLAYERS if x["id"] == pid), None)
         if not p:
             continue
-        raw = player_stats.get(p["name"], 0)
-        if pid == team_entry["captain"]:
-            raw *= 2
-        elif pid == team_entry["vice_captain"]:
-            raw *= 1.5
-        total += raw
-    return round(total, 1)
+        benched = False
+        if playing_xi:
+            benched = p["name"] not in playing_xi
+        raw = 0 if benched else player_stats.get(p["name"], 0)
+        is_cap = pid == team_entry.get("captain")
+        is_vc  = pid == team_entry.get("vice_captain")
+        scored = raw * 2 if is_cap else raw * 1.5 if is_vc else raw
+        total += scored
+        breakdown.append({
+            "name": p["name"], "role": p["role"],
+            "raw": raw, "pts": round(scored, 1),
+            "is_captain": is_cap, "is_vc": is_vc, "benched": benched,
+        })
+    return round(total, 1), breakdown
 
 # ── UI helpers ────────────────────────────────────────────────────────────────
 def player_by_id(pid):
     return next((p for p in PLAYERS if p["id"] == pid), None)
 
 def role_color(role):
-    return {"WK": "🧤", "BAT": "🏏", "AR": "⭐", "BOWL": "🎳"}.get(role, "")
+    return {"WK": "🧤", "BAT": "🏏", "AR": "⭐", "BOWL": "🔴"}.get(role, "")
 
 def team_badge(team):
     colors = {"RCB": "🔴", "SRH": "🟠"}
@@ -511,16 +559,35 @@ def page_leaderboard():
     else:
         st.success("🔓 Teams are now visible! Match has started.")
 
-    # ── Live score ───────────────────────────────────────────────────────────
+    # ── Live match data ───────────────────────────────────────────────────────
     live = fetch_live_score()
+    match_id = live.get("id", "") if live else ""
+    toss, playing_xi = fetch_match_info(match_id) if match_id else ({}, [])
+
     if live:
         st.markdown("### 🔴 Live")
+
+        # Toss result
+        if toss:
+            st.markdown(
+                f"🪙 **Toss:** {toss.get('winner', '?')} won and chose to **{toss.get('decision', '?')}**"
+            )
+
+        # Playing XI notice
+        if playing_xi:
+            st.success(f"✅ Playing XI confirmed — {len(playing_xi)} players announced")
+        else:
+            st.warning("⏳ Playing XI not yet announced")
+
+        # Score
         score_text = live.get("status", "Match in progress")
         st.info(score_text)
         scores_raw = live.get("score", [])
         if scores_raw:
             for inn in scores_raw:
-                st.markdown(f"**{inn.get('inning','')}:** {inn.get('r',0)}/{inn.get('w',0)} ({inn.get('o',0)} ov)")
+                st.markdown(
+                    f"**{inn.get('inning','')}:** {inn.get('r',0)}/{inn.get('w',0)} ({inn.get('o',0)} ov)"
+                )
     else:
         if API_KEY:
             st.warning("No live data yet — match may not have started.")
@@ -529,22 +596,39 @@ def page_leaderboard():
 
     st.divider()
 
-    all_entries = list(data["teams"].values())
+    # ── Playing XI panel ─────────────────────────────────────────────────────
+    if playing_xi and teams_revealed:
+        with st.expander("🟢 View Playing XI"):
+            rcb_xi = [p["name"] for p in PLAYERS if p["team"] == "RCB" and p["name"] in playing_xi]
+            srh_xi = [p["name"] for p in PLAYERS if p["team"] == "SRH" and p["name"] in playing_xi]
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"**🔴 RCB ({len(rcb_xi)})**")
+                for n in rcb_xi:
+                    st.markdown(f"🟢 {n}")
+            with c2:
+                st.markdown(f"**🟠 SRH ({len(srh_xi)})**")
+                for n in srh_xi:
+                    st.markdown(f"🟢 {n}")
+        st.divider()
 
-    # Fetch player stats if live
+    # ── Fetch player stats ───────────────────────────────────────────────────
     player_stats = {}
     if live and teams_revealed:
-        mid = live.get("id", "")
-        player_stats = fetch_player_stats(mid)
+        player_stats = fetch_player_stats(match_id)
 
-    # Build leaderboard rows — include everyone registered, team or not
+    # ── Build leaderboard rows ───────────────────────────────────────────────
+    all_entries = list(data["teams"].values())
     rows = []
     for t in all_entries:
         complete = t.get("team_complete", False)
-        pts = calc_fantasy_points(t, player_stats) if (teams_revealed and complete) else None
-        rows.append({"user": t["user"], "pts": pts, "team": t, "complete": complete})
+        if teams_revealed and complete:
+            pts, breakdown = calc_fantasy_points(t, player_stats, playing_xi if playing_xi else None)
+        else:
+            pts, breakdown = None, []
+        rows.append({"user": t["user"], "pts": pts, "breakdown": breakdown, "team": t, "complete": complete})
 
-    # Sort: complete teams first (by pts if revealed), then incomplete
+    # Sort
     if teams_revealed:
         rows.sort(key=lambda x: (not x["complete"], -(x["pts"] or 0)))
     else:
@@ -553,43 +637,59 @@ def page_leaderboard():
     if not rows:
         st.info("No participants yet. Be the first!")
     else:
-        st.markdown(f"**{len(rows)} participant(s)** · "
-                    f"{sum(1 for r in rows if r['complete'])} team(s) submitted")
+        st.markdown(
+            f"**{len(rows)} participant(s)** · "
+            f"{sum(1 for r in rows if r['complete'])} team(s) submitted"
+        )
         st.divider()
         for i, row in enumerate(rows):
             with st.container():
                 col1, col2, col3, col4 = st.columns([1, 4, 2, 3])
                 col1.markdown(f"**#{i+1}**")
-
-                # Name + status badge
-                status = "✅" if row["complete"] else "⏳ No team yet"
-                col2.markdown(f"**{row['user']}** {'' if row['complete'] else '— ⏳ picking team'}")
+                col2.markdown(f"**{row['user']}**{'' if row['complete'] else ' — ⏳ picking team'}")
 
                 if not row["complete"]:
                     col3.markdown("—")
                     col4.markdown("—")
                 elif teams_revealed:
-                    if row["pts"] is not None:
-                        col3.markdown(f"🏅 **{row['pts']} pts**")
-                    else:
-                        col3.markdown("🔒 Points pending")
+                    col3.markdown(f"🏅 **{row['pts']} pts**" if row["pts"] is not None else "🔒 Points pending")
                     cp = player_by_id(row["team"]["captain"])
                     col4.markdown(f"C: {cp['name'] if cp else '?'}")
                 else:
                     col3.markdown("🔒 Hidden")
                     col4.markdown("Revealed at 7:30 PM")
 
-            # Show full team only after reveal time
+            # Expanded team view with per-player points + benched markers
             if teams_revealed and row["complete"]:
-                with st.expander(f"👀 {row['user']}'s team"):
-                    players = [player_by_id(pid) for pid in row["team"]["players"]]
+                with st.expander(f"👀 {row['user']}'s team — {row['pts']} pts"):
                     cp = player_by_id(row["team"]["captain"])
                     vp = player_by_id(row["team"]["vice_captain"])
-                    st.markdown(f"**Captain:** {cp['name'] if cp else '?'} (2×) &nbsp;|&nbsp; **VC:** {vp['name'] if vp else '?'} (1.5×)")
-                    for role in ["WK", "BAT", "AR", "BOWL"]:
-                        rp = [p for p in players if p and p["role"] == role]
-                        if rp:
-                            st.markdown(f"{role_color(role)} **{role}:** " + ", ".join(p["name"] for p in rp))
+                    st.markdown(
+                        f"**Captain:** {cp['name'] if cp else '?'} (2×) &nbsp;|&nbsp; "
+                        f"**VC:** {vp['name'] if vp else '?'} (1.5×)"
+                    )
+                    st.divider()
+
+                    if row["breakdown"] and player_stats:
+                        # Sort breakdown: playing first, benched last
+                        bd = sorted(row["breakdown"], key=lambda x: -x["pts"])
+                        for b in bd:
+                            icon = role_color(b["role"])
+                            badge = " 👑C" if b["is_captain"] else " 🔰VC" if b["is_vc"] else ""
+                            st.markdown(f"{icon} {b['name']}{badge} — **{b['pts']} pts**")
+                    else:
+                        # No live stats yet — just show player list by role
+                        players = [player_by_id(pid) for pid in row["team"]["players"]]
+                        for role in ["WK", "BAT", "AR", "BOWL"]:
+                            rp = [p for p in players if p and p["role"] == role]
+                            if rp:
+                                st.markdown(
+                                    f"{role_color(role)} **{role}:** " +
+                                    ", ".join(
+                                        ("🟢 " if p["name"] in playing_xi else "") + p["name"]
+                                        for p in rp
+                                    )
+                                )
 
     # ── Host controls ────────────────────────────────────────────────────────
     st.divider()
@@ -618,12 +718,13 @@ def page_leaderboard():
     if live:
         st.caption("Live scores refresh every 2 minutes. Reload page for latest.")
 
+
 def page_squad():
     st.markdown("## 🏏 Full Squad — IPL 2026")
     st.markdown(f"### {MATCH['t1']['name']} vs {MATCH['t2']['name']}")
     st.caption("Full official squads. Only these players are available for fantasy selection.")
 
-    role_label = {"WK": "🧤 Wicketkeepers", "BAT": "🏏 Batters", "AR": "⭐ All-rounders", "BOWL": "🎳 Bowlers"}
+    role_label = {"WK": "🧤 Wicketkeepers", "BAT": "🏏 Batters", "AR": "⭐ All-rounders", "BOWL": "🔴 Bowlers"}
 
     col_rcb, col_srh = st.columns(2)
 
