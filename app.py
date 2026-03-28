@@ -128,7 +128,7 @@ def fetch_live_score():
             return None
         for match in data.get("data", []):
             name = match.get("name", "").lower()
-            teams = [t.get("name", "").lower() for t in match.get("teams", [])]
+            teams = [str(t).lower() for t in match.get("teams", [])]
             all_text = name + " ".join(teams)
             rcb = any(x in all_text for x in ["rcb", "royal challengers"])
             srh = any(x in all_text for x in ["srh", "sunrisers"])
@@ -725,7 +725,8 @@ def page_leaderboard():
                     )
                     raw = r.json()
                     for m in raw.get("data", []):
-                        st.markdown(f"- **{m.get('name', '?')}** — teams: {[t.get('name') for t in m.get('teams', [])]}")
+                        teams = m.get("teams", [])
+                        st.markdown(f"- **{m.get('name', '?')}** — teams: {teams}")
                 except Exception as e:
                     st.error(str(e))
             else:
