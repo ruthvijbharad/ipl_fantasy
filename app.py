@@ -19,30 +19,62 @@ MATCH = {
 }
 
 PLAYERS = [
-    # RCB
-    {"id":"r1",  "name":"Virat Kohli",       "role":"BAT",  "team":"RCB", "credits":11.0},
+    # ── RCB — Batters ───────────────────────────────────────────────────────
+    {"id":"r1",  "name":"Virat Kohli",        "role":"BAT",  "team":"RCB", "credits":11.0},
     {"id":"r2",  "name":"Rajat Patidar",      "role":"BAT",  "team":"RCB", "credits":9.5},
-    {"id":"r3",  "name":"Phil Salt",          "role":"WK",   "team":"RCB", "credits":9.5},
-    {"id":"r4",  "name":"Devdutt Padikkal",   "role":"BAT",  "team":"RCB", "credits":8.5},
-    {"id":"r5",  "name":"Tim David",          "role":"BAT",  "team":"RCB", "credits":8.5},
-    {"id":"r6",  "name":"Krunal Pandya",      "role":"AR",   "team":"RCB", "credits":9.0},
-    {"id":"r7",  "name":"Romario Shepherd",   "role":"AR",   "team":"RCB", "credits":8.0},
-    {"id":"r8",  "name":"Josh Hazlewood",     "role":"BOWL", "team":"RCB", "credits":9.0},
-    {"id":"r9",  "name":"Yash Dayal",         "role":"BOWL", "team":"RCB", "credits":7.5},
-    {"id":"r10", "name":"Bhuvneshwar Kumar",  "role":"BOWL", "team":"RCB", "credits":8.0},
-    {"id":"r11", "name":"Suyash Sharma",      "role":"BOWL", "team":"RCB", "credits":7.0},
-    # SRH
+    {"id":"r3",  "name":"Devdutt Padikkal",   "role":"BAT",  "team":"RCB", "credits":8.5},
+    {"id":"r4",  "name":"Tim David",          "role":"BAT",  "team":"RCB", "credits":8.5},
+    {"id":"r5",  "name":"Venkatesh Iyer",     "role":"BAT",  "team":"RCB", "credits":8.0},
+    {"id":"r6",  "name":"Vihaan Malhotra",    "role":"BAT",  "team":"RCB", "credits":6.0},
+    # ── RCB — Wicketkeepers ─────────────────────────────────────────────────
+    {"id":"r7",  "name":"Phil Salt",          "role":"WK",   "team":"RCB", "credits":9.5},
+    {"id":"r8",  "name":"Jitesh Sharma",      "role":"WK",   "team":"RCB", "credits":8.5},
+    {"id":"r9",  "name":"Jordan Cox",         "role":"WK",   "team":"RCB", "credits":7.0},
+    # ── RCB — All-rounders ──────────────────────────────────────────────────
+    {"id":"r10", "name":"Jacob Bethell",      "role":"AR",   "team":"RCB", "credits":9.0},
+    {"id":"r11", "name":"Krunal Pandya",      "role":"AR",   "team":"RCB", "credits":9.0},
+    {"id":"r12", "name":"Romario Shepherd",   "role":"AR",   "team":"RCB", "credits":8.0},
+    {"id":"r13", "name":"Swapnil Singh",      "role":"AR",   "team":"RCB", "credits":7.0},
+    {"id":"r14", "name":"Kanishk Chouhan",    "role":"AR",   "team":"RCB", "credits":6.0},
+    {"id":"r15", "name":"Mangesh Yadav",      "role":"AR",   "team":"RCB", "credits":7.0},
+    {"id":"r16", "name":"Satwik Deswal",      "role":"AR",   "team":"RCB", "credits":6.0},
+    {"id":"r17", "name":"Vicky Ostwal",       "role":"AR",   "team":"RCB", "credits":7.0},
+    # ── RCB — Bowlers ───────────────────────────────────────────────────────
+    {"id":"r18", "name":"Bhuvneshwar Kumar",  "role":"BOWL", "team":"RCB", "credits":8.0},
+    {"id":"r19", "name":"Josh Hazlewood",     "role":"BOWL", "team":"RCB", "credits":9.0},
+    {"id":"r20", "name":"Suyash Sharma",      "role":"BOWL", "team":"RCB", "credits":7.0},
+    {"id":"r21", "name":"Yash Dayal",         "role":"BOWL", "team":"RCB", "credits":7.5},
+    {"id":"r22", "name":"Rasikh Salam Dar",   "role":"BOWL", "team":"RCB", "credits":7.5},
+    {"id":"r23", "name":"Jacob Duffy",        "role":"BOWL", "team":"RCB", "credits":7.0},
+    {"id":"r24", "name":"Nuwan Thushara",     "role":"BOWL", "team":"RCB", "credits":7.0},
+    {"id":"r25", "name":"Abhinandan Singh",   "role":"BOWL", "team":"RCB", "credits":6.0},
+    # ── SRH — Batters ───────────────────────────────────────────────────────
     {"id":"s1",  "name":"Travis Head",        "role":"BAT",  "team":"SRH", "credits":10.5},
     {"id":"s2",  "name":"Abhishek Sharma",    "role":"BAT",  "team":"SRH", "credits":9.5},
-    {"id":"s3",  "name":"Ishan Kishan",       "role":"WK",   "team":"SRH", "credits":9.5},
-    {"id":"s4",  "name":"Heinrich Klaasen",   "role":"WK",   "team":"SRH", "credits":9.0},
-    {"id":"s5",  "name":"Nitish Kumar Reddy", "role":"AR",   "team":"SRH", "credits":9.0},
-    {"id":"s6",  "name":"Liam Livingstone",   "role":"AR",   "team":"SRH", "credits":8.5},
-    {"id":"s7",  "name":"Harshal Patel",      "role":"BOWL", "team":"SRH", "credits":8.5},
-    {"id":"s8",  "name":"Jaydev Unadkat",     "role":"BOWL", "team":"SRH", "credits":7.5},
-    {"id":"s9",  "name":"Harsh Dubey",        "role":"BOWL", "team":"SRH", "credits":7.5},
-    {"id":"s10", "name":"Zeeshan Ansari",     "role":"BOWL", "team":"SRH", "credits":7.0},
-    {"id":"s11", "name":"Kamindu Mendis",     "role":"BAT",  "team":"SRH", "credits":8.0},
+    {"id":"s3",  "name":"Kamindu Mendis",     "role":"BAT",  "team":"SRH", "credits":8.0},
+    {"id":"s4",  "name":"Smaran Ravichandran","role":"BAT",  "team":"SRH", "credits":6.0},
+    {"id":"s5",  "name":"Aniket Verma",       "role":"BAT",  "team":"SRH", "credits":7.0},
+    # ── SRH — Wicketkeepers ─────────────────────────────────────────────────
+    {"id":"s6",  "name":"Ishan Kishan",       "role":"WK",   "team":"SRH", "credits":9.5},
+    {"id":"s7",  "name":"Heinrich Klaasen",   "role":"WK",   "team":"SRH", "credits":9.0},
+    {"id":"s8",  "name":"Salil Arora",        "role":"WK",   "team":"SRH", "credits":7.0},
+    # ── SRH — All-rounders ──────────────────────────────────────────────────
+    {"id":"s9",  "name":"Nitish Kumar Reddy", "role":"AR",   "team":"SRH", "credits":9.0},
+    {"id":"s10", "name":"Liam Livingstone",   "role":"AR",   "team":"SRH", "credits":8.5},
+    {"id":"s11", "name":"Pat Cummins",        "role":"AR",   "team":"SRH", "credits":9.5},
+    {"id":"s12", "name":"Jack Edwards",       "role":"AR",   "team":"SRH", "credits":7.0},
+    {"id":"s13", "name":"Brydon Carse",       "role":"AR",   "team":"SRH", "credits":7.5},
+    {"id":"s14", "name":"Shivam Mavi",        "role":"AR",   "team":"SRH", "credits":7.0},
+    # ── SRH — Bowlers ───────────────────────────────────────────────────────
+    {"id":"s15", "name":"Harshal Patel",      "role":"BOWL", "team":"SRH", "credits":8.5},
+    {"id":"s16", "name":"Jaydev Unadkat",     "role":"BOWL", "team":"SRH", "credits":7.5},
+    {"id":"s17", "name":"Harsh Dubey",        "role":"BOWL", "team":"SRH", "credits":7.5},
+    {"id":"s18", "name":"Zeeshan Ansari",     "role":"BOWL", "team":"SRH", "credits":7.0},
+    {"id":"s19", "name":"Eshan Malinga",      "role":"BOWL", "team":"SRH", "credits":6.5},
+    {"id":"s20", "name":"Sakib Hussain",      "role":"BOWL", "team":"SRH", "credits":6.0},
+    {"id":"s21", "name":"Praful Hinge",       "role":"BOWL", "team":"SRH", "credits":6.0},
+    {"id":"s22", "name":"Amit Kumar",         "role":"BOWL", "team":"SRH", "credits":6.0},
+    {"id":"s23", "name":"David Payne",        "role":"BOWL", "team":"SRH", "credits":7.0},
 ]
 
 ROLE_LIMITS = {"WK": (1, 4), "BAT": (3, 6), "AR": (1, 4), "BOWL": (3, 6)}
@@ -241,13 +273,17 @@ def page_home():
         st.rerun()
 
     st.divider()
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("📊 Leaderboard"):
             st.session_state["page"] = "leaderboard"
             st.rerun()
     with col2:
-        submitted = len(data["teams"])
+        if st.button("🏏 View Squads"):
+            st.session_state["page"] = "squad"
+            st.rerun()
+    with col3:
+        submitted = len([t for t in data["teams"].values() if t.get("team_complete", False)])
         st.metric("Teams submitted", submitted)
 
 
@@ -402,9 +438,15 @@ def page_builder():
             st.session_state["page"] = "success"
             st.rerun()
 
-    if st.button("← Back"):
-        st.session_state["page"] = "home"
-        st.rerun()
+    bcol1, bcol2 = st.columns(2)
+    with bcol1:
+        if st.button("← Back"):
+            st.session_state["page"] = "home"
+            st.rerun()
+    with bcol2:
+        if st.button("🏏 View Full Squads"):
+            st.session_state["page"] = "squad"
+            st.rerun()
 
 
 def page_success():
@@ -576,6 +618,40 @@ def page_leaderboard():
     if live:
         st.caption("Live scores refresh every 2 minutes. Reload page for latest.")
 
+def page_squad():
+    st.markdown("## 🏏 Full Squad — IPL 2026")
+    st.markdown(f"### {MATCH['t1']['name']} vs {MATCH['t2']['name']}")
+    st.caption("Full official squads. Only these players are available for fantasy selection.")
+
+    role_label = {"WK": "🧤 Wicketkeepers", "BAT": "🏏 Batters", "AR": "⭐ All-rounders", "BOWL": "🎳 Bowlers"}
+
+    col_rcb, col_srh = st.columns(2)
+
+    for col, team_id, team_name, color in [
+        (col_rcb, "RCB", MATCH["t1"]["name"], MATCH["t1"]["color"]),
+        (col_srh, "SRH", MATCH["t2"]["name"], MATCH["t2"]["color"]),
+    ]:
+        with col:
+            st.markdown(f"<h3 style='color:{color}'>{team_name}</h3>", unsafe_allow_html=True)
+            team_players = [p for p in PLAYERS if p["team"] == team_id]
+            for role in ["WK", "BAT", "AR", "BOWL"]:
+                rp = [p for p in team_players if p["role"] == role]
+                if not rp:
+                    continue
+                st.markdown(f"**{role_label[role]}**")
+                for p in rp:
+                    st.markdown(
+                        f"&nbsp;&nbsp;• {p['name']} &nbsp;<span style='color:gray;font-size:0.85em'>{p['credits']} cr</span>",
+                        unsafe_allow_html=True,
+                    )
+                st.markdown("")
+
+    st.divider()
+    if st.button("← Back"):
+        st.session_state["page"] = "home"
+        st.rerun()
+
+
 # ── Router ────────────────────────────────────────────────────────────────────
 if "page" not in st.session_state:
     st.session_state["page"] = "home"
@@ -590,3 +666,5 @@ elif page == "success":
     page_success()
 elif page == "leaderboard":
     page_leaderboard()
+elif page == "squad":
+    page_squad()
