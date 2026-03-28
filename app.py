@@ -241,7 +241,37 @@ def fetch_match_info(match_id):
 
     return stats
 
-def calc_fantasy_points(team_entry, player_stats, playing_xi=None):
+def manual_to_stats(manual_scores):
+    """Convert manual score entries into the same {name: pts} format as the API."""
+    stats = {}
+    for name, s in manual_scores.items():
+        pts = 0
+        runs     = s.get("runs", 0)
+        fours    = s.get("fours", 0)
+        sixes    = s.get("sixes", 0)
+        wickets  = s.get("wickets", 0)
+        maidens  = s.get("maidens", 0)
+        catches  = s.get("catches", 0)
+        runouts  = s.get("runouts", 0)
+        stumpings= s.get("stumpings", 0)
+        duck     = s.get("duck", False)
+        pts += runs * POINTS_SYSTEM["run"]
+        pts += fours * POINTS_SYSTEM["boundary_bonus"]
+        pts += sixes * POINTS_SYSTEM["six_bonus"]
+        if runs >= 100: pts += POINTS_SYSTEM["century"]
+        elif runs >= 50: pts += POINTS_SYSTEM["half_century"]
+        if duck: pts += POINTS_SYSTEM["duck"]
+        pts += wickets * POINTS_SYSTEM["wicket"]
+        if wickets >= 5: pts += POINTS_SYSTEM["five_wicket"]
+        elif wickets >= 3: pts += POINTS_SYSTEM["three_wicket"]
+        pts += maidens * POINTS_SYSTEM["maiden"]
+        pts += catches * POINTS_SYSTEM["catch"]
+        pts += runouts * POINTS_SYSTEM["runout"]
+        pts += stumpings * POINTS_SYSTEM["stumping"]
+        stats[name] = pts
+    return stats
+
+
     """Returns (total_pts, breakdown_list).
     breakdown_list = [{"name", "pts", "raw", "role", "is_captain", "is_vc", "benched"}]
     """
@@ -616,10 +646,15 @@ def page_leaderboard():
                     st.markdown(f"🟢 {n}")
         st.divider()
 
-    # ── Fetch player stats ───────────────────────────────────────────────────
+    # ── Fetch player stats (API or manual fallback) ──────────────────────────
     player_stats = {}
     if live and teams_revealed:
         player_stats = fetch_player_stats(match_id)
+    if not player_stats and teams_revealed:
+        manual = data.get("manual_scores", {})
+        if manual:
+            player_stats = manual_to_stats(manual)
+            st.info("📝 Showing manually entered scores.")
 
     # ── Build leaderboard rows ───────────────────────────────────────────────
     all_entries = list(data["teams"].values())
@@ -701,9 +736,9 @@ def page_leaderboard():
     host_pw = st.text_input("Host password", type="password", placeholder="set HOST_PASSWORD in secrets")
     real_pw = st.secrets.get("HOST_PASSWORD", "ipl2026host")
     if host_pw == real_pw:
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         with c1:
-            if st.button("🔓 Force reveal now (override time)"):
+            if st.button("🔓 Force reveal now"):
                 data["match_live"] = True
                 save_data(data)
                 st.success("Teams revealed!")
@@ -713,24 +748,11 @@ def page_leaderboard():
                 data["match_live"] = False
                 save_data(data)
                 st.rerun()
-
-        # Debug: show raw API matches
-        with st.expander("🔍 Debug — raw API matches"):
-            if API_KEY:
-                try:
-                    r = requests.get(
-                        "https://api.cricapi.com/v1/currentMatches",
-                        params={"apikey": API_KEY, "offset": 0},
-                        timeout=8,
-                    )
-                    raw = r.json()
-                    for m in raw.get("data", []):
-                        teams = m.get("teams", [])
-                        st.markdown(f"- **{m.get('name', '?')}** — teams: {teams}")
-                except Exception as e:
-                    st.error(str(e))
-            else:
-                st.warning("No API key set.")
+        with c3:
+            if st.button("✏️ Enter player scores"):
+                st.session_state["host_pw_cache"] = host_pw
+                st.session_state["page"] = "manual_scores"
+                st.rerun()
 
     st.divider()
     if st.button("← Back"):
@@ -739,6 +761,101 @@ def page_leaderboard():
 
     if live:
         st.caption("Live scores refresh every 2 minutes. Reload page for latest.")
+
+
+def page_manual_scores():
+    real_pw = st.secrets.get("HOST_PASSWORD", "ipl2026host")
+    if st.session_state.get("host_pw_cache") != real_pw:
+        st.error("Unauthorised.")
+        if st.button("← Back"):
+            st.session_state["page"] = "leaderboard"
+            st.rerun()
+        return
+
+    data = load_data()
+    manual = data.get("manual_scores", {})
+
+    st.markdown("## ✏️ Enter Player Scores")
+    st.caption("Fill in stats for players who batted/bowled. Leave blank for 0. Points calculate automatically.")
+
+    # Show points system as reference
+    with st.expander("📋 Points system reference"):
+        st.markdown("""
+| Event | Points |
+|---|---|
+| Each run | +1 |
+| Boundary (4) | +1 bonus |
+| Six | +2 bonus |
+| Half century | +8 bonus |
+| Century | +16 bonus |
+| Duck | -2 |
+| Wicket | +25 |
+| 3-wicket haul | +4 bonus |
+| 5-wicket haul | +8 bonus |
+| Maiden over | +4 |
+| Catch | +8 |
+| Run out | +12 |
+| Stumping | +12 |
+        """)
+
+    st.divider()
+
+    updated = {}
+    for team_id in ["RCB", "SRH"]:
+        color = MATCH["t1"]["color"] if team_id == "RCB" else MATCH["t2"]["color"]
+        st.markdown(f"<h3 style='color:{color}'>{team_id}</h3>", unsafe_allow_html=True)
+        team_players = [p for p in PLAYERS if p["team"] == team_id]
+
+        for p in team_players:
+            prev = manual.get(p["name"], {})
+            with st.expander(f"{role_color(p['role'])} {p['name']}"):
+                c1, c2, c3 = st.columns(3)
+                c4, c5, c6 = st.columns(3)
+                runs    = c1.number_input("Runs",     min_value=0, value=int(prev.get("runs", 0)),    key=f"runs_{p['id']}")
+                fours   = c2.number_input("4s",       min_value=0, value=int(prev.get("fours", 0)),   key=f"fours_{p['id']}")
+                sixes   = c3.number_input("6s",       min_value=0, value=int(prev.get("sixes", 0)),   key=f"sixes_{p['id']}")
+                wickets = c4.number_input("Wickets",  min_value=0, value=int(prev.get("wickets", 0)), key=f"wkts_{p['id']}")
+                maidens = c5.number_input("Maidens",  min_value=0, value=int(prev.get("maidens", 0)), key=f"maidens_{p['id']}")
+                catches = c6.number_input("Catches",  min_value=0, value=int(prev.get("catches", 0)), key=f"catches_{p['id']}")
+                c7, c8 = st.columns(2)
+                runouts  = c7.number_input("Run outs",  min_value=0, value=int(prev.get("runouts", 0)),  key=f"ro_{p['id']}")
+                stumpings= c8.number_input("Stumpings", min_value=0, value=int(prev.get("stumpings", 0)),key=f"st_{p['id']}")
+                duck = st.checkbox("Duck (out for 0)?", value=bool(prev.get("duck", False)), key=f"duck_{p['id']}")
+
+                # Live preview
+                pts = 0
+                pts += runs * POINTS_SYSTEM["run"]
+                pts += fours * POINTS_SYSTEM["boundary_bonus"]
+                pts += sixes * POINTS_SYSTEM["six_bonus"]
+                if runs >= 100: pts += POINTS_SYSTEM["century"]
+                elif runs >= 50: pts += POINTS_SYSTEM["half_century"]
+                if duck: pts += POINTS_SYSTEM["duck"]
+                pts += wickets * POINTS_SYSTEM["wicket"]
+                if wickets >= 5: pts += POINTS_SYSTEM["five_wicket"]
+                elif wickets >= 3: pts += POINTS_SYSTEM["three_wicket"]
+                pts += maidens * POINTS_SYSTEM["maiden"]
+                pts += catches * POINTS_SYSTEM["catch"]
+                pts += runouts * POINTS_SYSTEM["runout"]
+                pts += stumpings * POINTS_SYSTEM["stumping"]
+                st.markdown(f"**→ {pts} fantasy points**")
+
+                updated[p["name"]] = {
+                    "runs": runs, "fours": fours, "sixes": sixes,
+                    "wickets": wickets, "maidens": maidens, "catches": catches,
+                    "runouts": runouts, "stumpings": stumpings, "duck": duck,
+                }
+        st.divider()
+
+    if st.button("💾 Save all scores", type="primary"):
+        data["manual_scores"] = updated
+        data["match_live"] = True
+        save_data(data)
+        st.success("✅ Scores saved! Leaderboard updated.")
+
+    if st.button("← Back to Leaderboard"):
+        st.session_state["page"] = "leaderboard"
+        st.rerun()
+
 
 
 def page_squad():
@@ -791,3 +908,5 @@ elif page == "leaderboard":
     page_leaderboard()
 elif page == "squad":
     page_squad()
+elif page == "manual_scores":
+    page_manual_scores()
