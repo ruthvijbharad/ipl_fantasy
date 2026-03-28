@@ -113,7 +113,7 @@ def is_past_reveal_time():
     return (now.hour, now.minute) >= (REVEAL_HOUR_IST, REVEAL_MINUTE_IST)
 
 # ── Live score API ────────────────────────────────────────────────────────────
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=60)
 def fetch_live_score():
     if not API_KEY:
         return None
@@ -127,14 +127,18 @@ def fetch_live_score():
         if data.get("status") != "success":
             return None
         for match in data.get("data", []):
-            name = match.get("name", "")
-            if "RCB" in name and "SRH" in name:
+            name = match.get("name", "").lower()
+            teams = [t.get("name", "").lower() for t in match.get("teams", [])]
+            all_text = name + " ".join(teams)
+            rcb = any(x in all_text for x in ["rcb", "royal challengers"])
+            srh = any(x in all_text for x in ["srh", "sunrisers"])
+            if rcb and srh:
                 return match
         return None
     except:
         return None
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=60)
 def fetch_player_stats(match_id):
     if not API_KEY or not match_id:
         return {}
@@ -151,7 +155,7 @@ def fetch_player_stats(match_id):
     except:
         return {}
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=60)
 def fetch_match_info(match_id):
     """Fetch toss result and Playing XI from match info endpoint."""
     if not API_KEY or not match_id:
@@ -709,6 +713,23 @@ def page_leaderboard():
                 data["match_live"] = False
                 save_data(data)
                 st.rerun()
+
+        # Debug: show raw API matches
+        with st.expander("🔍 Debug — raw API matches"):
+            if API_KEY:
+                try:
+                    r = requests.get(
+                        "https://api.cricapi.com/v1/currentMatches",
+                        params={"apikey": API_KEY, "offset": 0},
+                        timeout=8,
+                    )
+                    raw = r.json()
+                    for m in raw.get("data", []):
+                        st.markdown(f"- **{m.get('name', '?')}** — teams: {[t.get('name') for t in m.get('teams', [])]}")
+                except Exception as e:
+                    st.error(str(e))
+            else:
+                st.warning("No API key set.")
 
     st.divider()
     if st.button("← Back"):
