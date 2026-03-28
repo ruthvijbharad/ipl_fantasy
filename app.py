@@ -50,6 +50,10 @@ MAX_CREDITS = 100.0
 MAX_PER_TEAM = 7
 TEAM_SIZE = 11
 
+# Teams are revealed automatically at this time (IST = UTC+5:30)
+REVEAL_HOUR_IST   = 19   # 7 PM
+REVEAL_MINUTE_IST = 30   # :30 → 7:30 PM IST
+
 POINTS_SYSTEM = {
     "run": 1, "boundary_bonus": 1, "six_bonus": 2,
     "half_century": 8, "century": 16, "duck": -2,
@@ -68,6 +72,13 @@ def load_data():
 
 def save_data(data):
     DATA_FILE.write_text(json.dumps(data, indent=2))
+
+def is_past_reveal_time():
+    """Returns True if current IST time is 7:30 PM or later."""
+    from datetime import timezone, timedelta
+    IST = timezone(timedelta(hours=5, minutes=30))
+    now = datetime.now(IST)
+    return (now.hour, now.minute) >= (REVEAL_HOUR_IST, REVEAL_MINUTE_IST)
 
 # ── Live score API ────────────────────────────────────────────────────────────
 @st.cache_data(ttl=120)
@@ -208,12 +219,22 @@ def page_home():
         if key in data["users"] and data["users"][key] != name:
             st.error("❌ This name is taken. Try another.")
             return
-        # Register name
+        # Register name — also add a placeholder leaderboard entry immediately
         if key not in data["users"]:
             data["users"][key] = name
+            # Add to leaderboard right away (no team yet)
+            if key not in data["teams"]:
+                data["teams"][key] = {
+                    "user": name,
+                    "players": [],
+                    "captain": None,
+                    "vice_captain": None,
+                    "submitted_at": None,
+                    "team_complete": False,
+                }
             save_data(data)
         st.session_state["username"] = name
-        if key in data["teams"]:
+        if key in data["teams"] and data["teams"][key].get("team_complete", False):
             st.session_state["page"] = "success"
         else:
             st.session_state["page"] = "builder"
@@ -375,6 +396,7 @@ def page_builder():
                 "captain": captain,
                 "vice_captain": vc,
                 "submitted_at": datetime.now().isoformat(),
+                "team_complete": True,
             }
             save_data(data)
             st.session_state["page"] = "success"
@@ -389,7 +411,7 @@ def page_success():
     username = st.session_state.get("username", "")
     data = load_data()
     team = data["teams"].get(username.lower())
-    if not team:
+    if not team or not team.get("team_complete", False):
         st.session_state["page"] = "builder"
         st.rerun()
 
@@ -426,11 +448,28 @@ def page_success():
 
 
 def page_leaderboard():
+    from datetime import timezone, timedelta
+    IST = timezone(timedelta(hours=5, minutes=30))
+
     data = load_data()
     st.markdown("## 📊 Leaderboard")
     st.markdown(f"**{MATCH['t1']['name']} vs {MATCH['t2']['name']}** · IPL 2026")
 
-    # Live score
+    # ── Time-based reveal logic ──────────────────────────────────────────────
+    teams_revealed = is_past_reveal_time() or data.get("match_live", False)
+
+    now_ist = datetime.now(IST)
+    if not teams_revealed:
+        reveal_today = now_ist.replace(hour=REVEAL_HOUR_IST, minute=REVEAL_MINUTE_IST, second=0, microsecond=0)
+        mins_left = int((reveal_today - now_ist).total_seconds() // 60)
+        if mins_left > 0:
+            st.info(f"⏳ Teams will be revealed at **7:30 PM IST** — {mins_left} minute(s) to go!")
+        else:
+            st.info("⏳ Teams will be revealed at **7:30 PM IST**.")
+    else:
+        st.success("🔓 Teams are now visible! Match has started.")
+
+    # ── Live score ───────────────────────────────────────────────────────────
     live = fetch_live_score()
     if live:
         st.markdown("### 🔴 Live")
@@ -448,48 +487,77 @@ def page_leaderboard():
 
     st.divider()
 
-    teams = list(data["teams"].values())
-    match_live = data.get("match_live", False)
+    all_entries = list(data["teams"].values())
 
     # Fetch player stats if live
     player_stats = {}
-    if live and match_live:
+    if live and teams_revealed:
         mid = live.get("id", "")
         player_stats = fetch_player_stats(mid)
 
-    # Build leaderboard rows
+    # Build leaderboard rows — include everyone registered, team or not
     rows = []
-    for t in teams:
-        pts = calc_fantasy_points(t, player_stats) if match_live else None
-        rows.append({"user": t["user"], "pts": pts, "team": t})
+    for t in all_entries:
+        complete = t.get("team_complete", False)
+        pts = calc_fantasy_points(t, player_stats) if (teams_revealed and complete) else None
+        rows.append({"user": t["user"], "pts": pts, "team": t, "complete": complete})
 
-    if match_live and rows:
-        rows.sort(key=lambda x: x["pts"] or 0, reverse=True)
+    # Sort: complete teams first (by pts if revealed), then incomplete
+    if teams_revealed:
+        rows.sort(key=lambda x: (not x["complete"], -(x["pts"] or 0)))
+    else:
+        rows.sort(key=lambda x: (not x["complete"], x["user"].lower()))
 
     if not rows:
-        st.info("No teams submitted yet. Be the first!")
+        st.info("No participants yet. Be the first!")
     else:
+        st.markdown(f"**{len(rows)} participant(s)** · "
+                    f"{sum(1 for r in rows if r['complete'])} team(s) submitted")
+        st.divider()
         for i, row in enumerate(rows):
             with st.container():
                 col1, col2, col3, col4 = st.columns([1, 4, 2, 3])
                 col1.markdown(f"**#{i+1}**")
-                col2.markdown(f"**{row['user']}**")
-                if match_live and row["pts"] is not None:
-                    col3.markdown(f"🏅 **{row['pts']} pts**")
-                else:
-                    col3.markdown("🔒 Locked")
-                cp = player_by_id(row["team"]["captain"])
-                col4.markdown(f"C: {cp['name'] if cp else '?'}")
 
-    # Host controls
+                # Name + status badge
+                status = "✅" if row["complete"] else "⏳ No team yet"
+                col2.markdown(f"**{row['user']}** {'' if row['complete'] else '— ⏳ picking team'}")
+
+                if not row["complete"]:
+                    col3.markdown("—")
+                    col4.markdown("—")
+                elif teams_revealed:
+                    if row["pts"] is not None:
+                        col3.markdown(f"🏅 **{row['pts']} pts**")
+                    else:
+                        col3.markdown("🔒 Points pending")
+                    cp = player_by_id(row["team"]["captain"])
+                    col4.markdown(f"C: {cp['name'] if cp else '?'}")
+                else:
+                    col3.markdown("🔒 Hidden")
+                    col4.markdown("Revealed at 7:30 PM")
+
+            # Show full team only after reveal time
+            if teams_revealed and row["complete"]:
+                with st.expander(f"👀 {row['user']}'s team"):
+                    players = [player_by_id(pid) for pid in row["team"]["players"]]
+                    cp = player_by_id(row["team"]["captain"])
+                    vp = player_by_id(row["team"]["vice_captain"])
+                    st.markdown(f"**Captain:** {cp['name'] if cp else '?'} (2×) &nbsp;|&nbsp; **VC:** {vp['name'] if vp else '?'} (1.5×)")
+                    for role in ["WK", "BAT", "AR", "BOWL"]:
+                        rp = [p for p in players if p and p["role"] == role]
+                        if rp:
+                            st.markdown(f"{role_color(role)} **{role}:** " + ", ".join(p["name"] for p in rp))
+
+    # ── Host controls ────────────────────────────────────────────────────────
     st.divider()
     st.markdown("#### 🔑 Host controls")
-    host_pw = st.text_input("Host password", type="password", placeholder="set 'host_password' in secrets")
+    host_pw = st.text_input("Host password", type="password", placeholder="set HOST_PASSWORD in secrets")
     real_pw = st.secrets.get("HOST_PASSWORD", "ipl2026host")
     if host_pw == real_pw:
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("🔓 Reveal teams (match started)"):
+            if st.button("🔓 Force reveal now (override time)"):
                 data["match_live"] = True
                 save_data(data)
                 st.success("Teams revealed!")
